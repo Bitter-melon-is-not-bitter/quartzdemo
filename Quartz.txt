@@ -1,0 +1,194 @@
+﻿Quartz运行环境
+	1.Quartz可以运行嵌入在另一个独立式应用程序
+	2.Quartz可以在应用程序服务器（或servlet容器）内被实例化，并且参与事务
+	3.Quartz可以作为一个独立的程序运行（其自己的Java虚拟机内），可以通过RMI使用
+	4.Quartz可以被实例化，作为独立的项目集群（负载均衡和故障转移功能），用于作业的执行
+
+Quartz设计模式
+	1.Builder模式
+	2.Factory模式
+	3.组件模式
+	4.链式编程
+
+Quartz学习的核心概念
+	1.任务job
+		job就是你想要实现的任务类，每一个job必须实现org.quartz.job接口，且只能实现接口定义的execute()方法。
+	2.触发器Trigger
+		Trigger为你执行任务的触发器，比如你想每天定时3点发送一份统计邮件，Trigger将会设置3点进行执行任务。
+		Trigger主要包含俩种SimpleTrigger和CronTrigger俩种。
+	3.调度器Scheduler
+		Scheduler为任务的调度器，它将会任务job及触发器Trigger整合起来，负责基于Trigger设定的时间来执行job
+
+Quartz的几个常用API
+	1.Scheduler用于与调度程序交互的主程序接口。
+		Scheduler调度程序任务执行计划表，只有安排进行执行计划的任务job（通过sheduler.schedulerjob）方法安排进执行计划，当它预先定义的执行时间到了的时候（任务触发trigger），改任务才会执行。
+	2.job我们预先定义的希望在未来时间能被调度程序执行的任务类，我们可以自定义。
+	3.jobDetail使用jobDetail来定义定时任务的实例，jobDetail实例是通过jobBuilder类创建的。
+	4.jobDataMap可以包含不限量的（序列化）数据对象，在job实例执行的时候，可以使用其中的数据；jobDataMap时候Java 	Map接口的一个实现，额外增加了一些便于存取基本类型的数据的方法。
+	5.Trigger触发器，Trigger对象是用来触发执行job的。当调度一个job时，我们实例一个触发器然后调整它的属性来满足job执行的条件。表明任务在什么时候会执行。定义了一个已经被安排的任务将会在什么时候执行的时间条件，比如每2秒就执行一次。
+	6.jobBuilder用于声明一个任务实例，也可以定义关于该任务的详情比如任务名、组名等，这个声明的实例将会作为一个实际执行的任务。
+	7.TriggerBuilder触发器创建器，用于创建触发器的trigger实例。
+	8.jobListener、TriggerListener、SchedulerListener监听，用于对组件的监听
+
+Quartz简单入门
+	1.建立任务类，进行任务，这个类得实现Job接口，实现execute方法，在execute方法里面进行任务处理
+	2.创建任务调度器Scheduler(StdSchedulerFactory.getDefaultScheduler)
+	3.创建任务实例JobDetail jobDetail = JobBuiler.newJob(任务类.class).withIdentity("任务名称","任务分组").build();
+	4.创建触发器 SimpleTrigger trigger = TriggerBuilder.newTrigger()
+                .withIdentity("trigger1", "group1")//参数1：触发器名称唯一实例） 参数2：触发器组名和任务组名没有关系
+                .startNow()//马上启动
+                //.startAt() 设置多久启动
+                .withSchedule(SimpleScheduleBuilder.simpleSchedule().repeatSecondlyForever(1))//设置每隔多少秒进行任务调度
+                .build();
+    	5.让调度器关联任务和触发器，保证按照触发器定义的条件执行任务scheduler.scheduleJob(jobDetailo, trigger);
+    	6.启动scheduler.start();
+
+Job和JobDetail介绍
+	1.Job：工作任务调度的接口，任务类需要实现该接口，该接口中定义execute方法，类似JDK提供的TiemTask类的run方法，在里面编写任务执行的业务逻辑。
+	2.Job实例在Quartz中的生命周期：每次调度器执行Job时，它在调用execute方法前会创建一个新的job实例，当调用完成后，关联的job对象实例会被释放，释放的实例会被垃圾回收机制回收。
+	3.jobDetail：jobDetail为job实例提供了许多设置属性，已经jobDataMap成员变量属性，它用来存储特定job实例的状态信息，调度器需要借助jobDetail对象来添加job实例。
+	4.jobDetail重要属性：name，group，jobClass，jobDataMap。
+
+JobExecutionContext介绍
+	1.当Scheduler调用一个job，就会将jobExecutionContext传递给job的execute()方法。
+	2.job能通过jobExecutionContext对象访问到Quartz运行时候的环境以及job本身的明细数据。
+
+JobDataMap介绍
+	一、使用Map获取
+		1.在进行任务调度时，jobDataMap存储在jobExeutionContext中，非常方便获取。
+		2.jobDataMap可以用来装载任何可序列化的数据对象，当job实例对象被执行时这些参数对象会传递给它。
+		3.jobDataMap实现了JDK的Map接口，并且添加了非常方便的方法用来存取基本数据类型。
+
+	二、job实现类中添加setter方法对应jobDataMap的键值，Quartz框架默认的jobFactory实现在初始化job实例对象时会自动地调用这些setter方法
+
+	这里注意：如果遇到同名的key，Trigger中的usingJobDdata("messsage","simple触发器")会覆盖jobDetail中的usingJobData("message","打印日志")
+
+有状态的job和无状态的job
+	@PersistJobDataAfterExecution注解的使用
+	有状态的job可以理解为多次job调用期间可以持有一些状态信息，这些状态信息存储在jobDataMap中，而默认的无状态job每次调用时都会创建一个新的jobDataNMap
+
+	1.修改HelloSchedulerDemo.java。添加usingjobData("count",0)，表示计数器
+	2.修改Hello.java
+		添加count的setting和getting方法
+
+Trigger介绍
+	TriggerBulider创建Trigger接口，Trigger有个AbstractTrigger抽象类，AbstractTrigger抽象类下有四个实现类：CalendarIntervalTriggerImpl、SimpleTriggerImpl、DailyTimeIntervalTriggerImpl、CronTriggerImpl
+
+	最常用的是SimpleTriggerImpl和CronTriggerImpl
+	1.jobkey
+		表示job实例的标识，触发器被触发，该指定的job实例会被执行
+	2.startTime
+		表示触发器的时间表，第一次开始被触发的时间，它的数据类型是java.util.Date
+	3.endTime
+		指定触发器终止被触发的时间，它的数据类型是java.util.Date
+
+SimpleTrigger触发器
+	SimpleTrigger对于设置和使用是最为简单的一种QuartzTrigger
+		它是为那种需要在特定的日期/时间启动，且以一个可能的间隔重复执行n次的job所设计的
+	需要注意的点
+		1.SimpleTrigger的属性有：开始时间、结束时间、重复次数和重复的时间间隔
+		2.重复次数属性的值可以为0、正整数、或常量SimpleTrigger.REPEAT_INDEFINITELY
+		3.重复的时间间隔属性必须为0或长整型的正整数，以毫秒作为时间单位，当重复的时间间隔为0时，意味着与Trigger同时触发执行
+		4.如果有指定结束时间属性值，则结束的时间属性优先于重复次数属性，这样的好处在于：当我们需要创建一个每间隔10秒钟触发一次直到指定的结束时间的Trigger，而无需去计算从开始到结束的所重复的次数，我们只需要简单的指定结束时间和使用REPEAT_INDEFINITELY作为重复次数的属性值即可
+
+CroTrigger触发器
+	如果你需要像日历那样按日程来触发任务，而不是像SimpleTrigger那样每个特定的时间间隔触发，CroTriggers通常比SimpleTrigger更有用，因为它是基于日历的作用调度器
+	1.Cron Expressions--Cron表达式
+	Cron表达式被用来配置CronTrigger实例。Cron表达式是一个由七个子表达式组成的字符串。每个表达式都描述了一个单独的日程细节。这些子表达式用空格分隔，分别表示：
+		a.Seconds				秒
+		b.Minutes				分钟
+		c.Hours					小时
+		d.Day-of-Month			月中的天
+		e.Month 				月
+		f.Day-of-Week			周中的天
+		g.Year(optional field)	年（可选的域）
+
+		取值
+			字段			是否必填			允许值				运行的特殊字符
+			秒			是 				0-59				, - * /
+			分 			是 				0-59				, - * /
+			小时			是 				0-23				, - * /
+			日			是 				1-31 				, - * / ? L W C
+			月 			是 				1-12或JAN-DEC		, - * /
+			周 			是 				1-7或SUN-SAT			, - * / ? L C #
+			年 			否 				不填或1970-2099		, - * /
+
+		例如
+		"0 0 10,14,16 * * ?"	每天上午10点，下午2点，4点
+		"0 0/30 9-17 * * ?" 	朝九晚五工作时间内每半个小时，从0分开始每隔30分钟发送一次
+		"0 0 12 ? * WED"		表示每个星期三中午12点
+		"0 0 12 * * ?"			每天中午12点
+		"0 15 10 ? * * ?"		每天上午10：15
+		"0 15 10 * * ?"			每天上午10：15
+		"0 15 10 * * ? *"		每天上午10：15
+		"0 15 10 * * ? 2025"	2025年每天上午10：15
+		"0 * 14 * * ?"			每天下午2点到下午2：59期间每隔1分钟
+		"0 0/55 14 * * ?"		每天下午2点到下午2：55期间，从0开始到55分钟
+		"0 0/55 14,18 * * ?"	每天下午2点到下午2：55期间和下午6点到6：55期间，从0开始到55分钟触发
+		"0 15 10 ? * 6L"		每月的最后一个星期五上午10：15触发
+		"0 15 10 L * ?"			每月最后一日的上午10：15触发
+
+Quartz任务调度
+	一、配置、资源SchedulerFactory
+		Quartz以模块方式架构，因此，要使他运行，几个组件必须很好的胶合在一起
+		所有的Scheduler实例由SchedulerFactory创建
+		Quartz的三个核心概率：调度器、任务、触发器，
+		由SchedulerFactory创建Scheduler，由Schedler结合job和trigger运行
+		一个job可以对应多个trigger，但是一个trigger只能派发给一个job,如果需要十分复杂的触发计划，你可以创建多个Trigger并指派它们给同一个job
+		Scheduler的创建方式：
+			1.StdSchedulerFactory:
+				Quartz默认的SchedulerFactory
+				A.使用一组参数（Java.util.Properties）来创建和初始化Quartz调度器
+				B.配置参数一般存储在quart.properties文件中
+				C.调用getScheduler方法就能创建和初始化调度器对象
+				用法：
+					a.输出调度器开始时间
+						schedulerjob(JobDetail jobDetail,Trigger trigger)
+					b.启动任务调度
+						start()
+					c.任务调度挂起，即暂停操作
+						standby() 这个方法得配合Thread.sleep()方法操作
+					d.关闭任务调度
+						shutdown(true)：表示等待所有正在执行的job执行完毕之后，在关闭Scheduler
+						shutdown(false):表示直接关闭Scheduler
+			2.DirectSchedulerFactory:
+				DirectSchedulerFactory是对SchedulerFactory的直接实现通过它可以直接构建Scheduler、threadpool等
+
+Quartz.properties文件
+	默认路径：quartz-2.3.0中的org.quartz的quartz.properties
+	我们也可以在项目的资源下添加quartz.properties文件，去覆盖底层的配置文件
+
+	组成部分：
+		1.调度器属性
+		org.quartz.scheduler.instanceName
+			属性用来区分特定的调度器实例，可以按照功能用途来给调度器起名。
+		org.quartz.scheduler.instanceId
+			属性和前者一样，也允许任何字符串，但这个值必须在所有调度器实例中是唯一的，尤其是在一个集群环境中，作为集群的唯一key。假如你想Quartz帮你生成这个值的话，可以设置为AUTO。
+		2.线程池属性
+		org.quartz.threadPool.threadCount
+			处理job的线程个数，至少为1，但最多的话最好不要超过100，在多数机器上设置该值超过100的话就会显得相当不实用，特别是在你的job执行时间较长的情况下
+		org.quartz.threadPool.threadPriority
+			线程优先级，优先级高的线程比级别低的线程优先得到执行。最小为1，最大为10，默认为5
+		org.quartz.threadPool.class
+			一个实现了org.quartz.spi.ThreadPool接口的类，Quartz自带的线程池实现类是org.quartz.smpl.SimpleThreadPool
+		3.作业存储设置
+			描述了在调度器实例的生命周期中，job和trigger信息是如何被存储的。
+		4.插件配置
+			满足特定需求用到的Quartz插件配置
+
+Quartz监听器
+	1.概念
+	Quartz的监听器用于当任务调度中你所关注事件发生时，能够及时获取这一事件的通知。类似任务执行过程中的邮件、短信类的提醒。Quartz监听主要有JobListener、TriggerListener、SchedulerListener三种，顾名思义，分别代表任务、触发器、调度器对应的监听器。三者的使用方法类似，在开始介绍三种监听器之前，需要明确俩个概念：全局监听与非全局监听，二者的区别在与:
+		全局监听器能够收到所有的Job\Trigger的事件通知，而非全局监听器只能接收到在其上注册的Job或Trigger的事件，不在其上注册的job或Trigger则不会进行监听
+
+	2.JobListener
+	任务调度过程中，与任务job相关的事件包括：job开始执行的提示；job执行完成的提示灯
+	其中：
+		a.getName()
+			用于获取该JobListener的名称
+		b.jobToBeExecute()
+			Scheduler在jobDetail将要被执行时调用这个方法
+		c.jobExecutionVetoed方法：
+			Scheduler在jobDetail即将被执行，但又被TriggerListener否决时会调用该方法
+		d.jobWasExecuted方法
+			Scheduler在jobDetail被执行之后调用这个方法
